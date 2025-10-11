@@ -17,9 +17,5 @@ pydantic==2.12.0
 httpx==0.28.1
 requests==2.32.3
 
-# Visualization (for PyGame simulation)
-pygame==2.5.2
-networkx==3.2.1
-
 # Utilities
 python-dotenv==1.0.1

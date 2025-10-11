@@ -2,16 +2,26 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { useKeepAlive } from "@/lib/use-keep-alive";
+
+// Hardcoded backend URLs - production | local
+const BACKEND_URL =
+  typeof window !== "undefined" && window.location.hostname !== "localhost"
+    ? "https://mongodb-hackathon.onrender.com"
+    : "http://localhost:8000";
 
 export default function Home() {
   const [apiResponse, setApiResponse] = useState<string>("");
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
+  // Keep the backend alive by pinging every 14 minutes
+  useKeepAlive(BACKEND_URL, true, 14);
+
   const testConnection = async () => {
     setLoading(true);
     try {
-      const response = await fetch("http://localhost:8000/api/health");
+      const response = await fetch(`${BACKEND_URL}/api/health`);
       const json = await response.json();
       setApiResponse(JSON.stringify(json, null, 2));
     } catch (error) {
@@ -24,7 +34,7 @@ export default function Home() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const response = await fetch("http://localhost:8000/api/data");
+      const response = await fetch(`${BACKEND_URL}/api/data`);
       const json = await response.json();
       setData(json.data);
     } catch (error) {
@@ -41,6 +51,9 @@ export default function Home() {
           <h1 className="text-4xl font-bold">Next.js + FastAPI</h1>
           <p className="text-muted-foreground">
             Demo application with Tailwind CSS and shadcn/ui
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Backend: {BACKEND_URL}
           </p>
         </div>
 

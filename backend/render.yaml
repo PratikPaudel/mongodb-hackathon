@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: mongodb-hackathon-backend
+    env: python
+    region: oregon # Change to your preferred region
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.13.5
+      - key: RENDER_EXTERNAL_URL
+        sync: false # This is auto-populated by Render

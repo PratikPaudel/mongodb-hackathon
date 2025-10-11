@@ -57,6 +57,8 @@ Visit http://localhost:3000 and click the buttons to test the API connection!
 - ✅ TypeScript for type safety
 - ✅ Tailwind CSS v4 for modern styling
 - ✅ Auto-reloading for both frontend and backend
+- ✅ Built-in keep-alive system (backend pings itself every 14 minutes)
+- ✅ Ready for deployment to Render and Vercel
 
 ## Development
 
@@ -72,6 +74,23 @@ npx shadcn@latest add [component-name]
 When the backend is running, visit:
 - Swagger UI: http://localhost:8000/docs
 - ReDoc: http://localhost:8000/redoc
+
+## Deployment
+
+Ready to deploy? See **[DEPLOYMENT.md](./DEPLOYMENT.md)** for complete deployment instructions.
+
+**Quick Links:**
+- Backend: Deploy to [Render](https://render.com)
+- Frontend: Deploy to [Vercel](https://vercel.com)
+
+The backend includes a built-in keep-alive system that pings itself every 14 minutes to prevent free-tier services from going to sleep.
+
+## Documentation
+
+- **[README.md](./README.md)** - This file (quick start guide)
+- **[DEPLOYMENT.md](./DEPLOYMENT.md)** - Deployment instructions
+- **[PROGRESS.md](./PROGRESS.md)** - Development progress and roadmap
+- **[backend/README.md](./backend/README.md)** - Backend-specific documentation
 
 ## Next Steps
 

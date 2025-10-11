@@ -59,13 +59,13 @@ export function ActivityFeed({ messages }: ActivityFeedProps) {
         <p className="text-sm text-slate-600 mt-1">Real-time agent events</p>
       </div>
 
-      <div ref={feedRef} className="p-4 space-y-3 max-h-[600px] overflow-y-auto">
+      <div ref={feedRef} className="p-4 space-y-3 max-h-[600px] overflow-y-auto scroll-smooth">
         {messages.length === 0 ? (
           <div className="text-center py-12">
             <p className="text-slate-500 text-sm">No activity yet. Start a demo to see real-time updates.</p>
           </div>
         ) : (
-          messages.slice().reverse().map((message, idx) => (
+          messages.map((message, idx) => (
             <div
               key={`${message.timestamp}-${idx}`}
               className={`border-l-4 ${getEventColor(message.type)} pl-4 py-2 bg-slate-50 rounded-r transition-all hover:bg-slate-100`}

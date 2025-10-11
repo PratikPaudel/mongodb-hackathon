@@ -59,10 +59,11 @@ class Maze:
         return [p for p in directions if self.is_walkable(p)]
 
 class MazeSimulation:
-    def __init__(self, maze: Maze, websocket_manager=None):
+    def __init__(self, maze: Maze, websocket_manager=None, db=None):
         self.maze = maze
         self.agents: List[Agent] = []
         self.manager = websocket_manager
+        self.db = db
 
     def add_agent(self, agent: Agent):
         """Add agent to simulation"""
@@ -78,6 +79,68 @@ class MazeSimulation:
                 "timestamp": datetime.now().isoformat(),
                 "data": data
             })
+
+    async def save_skill_to_db(self, skill_data: Dict) -> str:
+        """Save extracted skill to MongoDB"""
+        if self.db is None:
+            return "skill_demo_only"
+
+        try:
+            # Generate a simple embedding (in production, use Voyage AI)
+            import numpy as np
+            embedding = np.random.rand(1024).tolist()
+
+            skill_doc = {
+                "schema_version": 1,
+                "skill_id": f"skill_maze_nav_{datetime.now().strftime('%Y%m%d%H%M%S')}",
+                "version": 1,
+                "name": skill_data["name"],
+                "description": skill_data["description"],
+                "description_embedding": embedding,
+                "metadata": {
+                    "author_agent": skill_data["author_agent"],
+                    "contributors": [],
+                    "created_at": datetime.now(),
+                    "updated_at": datetime.now(),
+                    "skill_type": "maze_navigation",
+                    "maze_type": "l_shaped",
+                    "complexity": "simple",
+                    "tags": ["maze", "navigation", "demo"]
+                },
+                "visual_path": skill_data["visual_path"],
+                "strategy": {
+                    "type": "path_following",
+                    "path": skill_data["visual_path"]
+                },
+                "stats": {
+                    "total_uses": 1,
+                    "successful_uses": 1,
+                    "success_rate": 1.0,
+                    "avg_completion_time_ms": skill_data["completion_time"] * 1000,
+                    "avg_steps": len(skill_data["visual_path"]),
+                    "improvement_over_baseline": 0.0,
+                    "last_used": datetime.now()
+                },
+                "relationships": {
+                    "parent_skill": None,
+                    "improved_by": [],
+                    "similar_skills": [],
+                    "used_in_combination_with": []
+                },
+                "applicable_to": {
+                    "maze_types": ["l_shaped"],
+                    "size_range": {"min": 5, "max": 50},
+                    "complexity": ["simple", "medium"]
+                },
+                "status": "active"
+            }
+
+            result = await self.db.skills.insert_one(skill_doc)
+            print(f"✅ Skill saved to MongoDB: {skill_doc['skill_id']}")
+            return skill_doc['skill_id']
+        except Exception as e:
+            print(f"⚠️ Failed to save skill to MongoDB: {e}")
+            return "skill_demo_only"
 
     async def random_walk(self, agent: Agent, max_steps: int = 200) -> float:
         """Agent performs random walk (no skill) - simulates exploration"""
@@ -214,6 +277,17 @@ class MazeSimulation:
             "completion_time": time_a
         })
 
+        # Save skill to MongoDB
+        skill_id = await self.save_skill_to_db({
+            "name": "L-Shaped Maze Navigation",
+            "description": f"Efficient navigation strategy for L-shaped mazes. Learned from {agent_a.name}'s successful exploration.",
+            "author_agent": agent_a.agent_id,
+            "visual_path": skill_path,
+            "completion_time": time_a
+        })
+
+        await asyncio.sleep(1)
+
         # Create Agent B (Learner)
         agent_b = Agent(
             agent_id="agent_beta",
@@ -292,15 +366,15 @@ def create_demo_maze() -> Maze:
         goal=Position(8, 7)
     )
 
-async def run_simulation_with_websocket(maze_data: Dict, websocket_manager):
-    """Run simulation with WebSocket broadcasting"""
+async def run_simulation_with_websocket(maze_data: Dict, websocket_manager, db=None):
+    """Run simulation with WebSocket broadcasting and MongoDB persistence"""
     maze = Maze(
         grid=maze_data['grid'],
         spawn=Position(**maze_data['spawn_point']),
         goal=Position(**maze_data['goal_point'])
     )
 
-    sim = MazeSimulation(maze, websocket_manager)
+    sim = MazeSimulation(maze, websocket_manager, db)
     results = await sim.run_demo_sequence()
     return results
 

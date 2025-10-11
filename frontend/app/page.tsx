@@ -6,6 +6,7 @@ import { SkillLibrary } from '@/components/SkillLibrary';
 import { ActivityFeed } from '@/components/ActivityFeed';
 import { PerformanceChart } from '@/components/PerformanceChart';
 import { AgentCard } from '@/components/AgentCard';
+import { MazeVisualization } from '@/components/MazeVisualization';
 import { useWebSocket } from '@/hooks/useWebSocket';
 import { useKeepAlive } from '@/lib/use-keep-alive';
 
@@ -196,33 +197,38 @@ export default function Dashboard() {
 
         {!isLoading && (
           <div className="space-y-6">
+            {/* Main Demo: Maze + Activity Feed Side-by-Side */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Left: Maze Visualization */}
+              <div>
+                <MazeVisualization messages={messages} />
+              </div>
+
+              {/* Right: Activity Feed */}
+              <div>
+                <ActivityFeed messages={messages} />
+              </div>
+            </div>
+
+            {/* Skill Library */}
+            <div>
+              <SkillLibrary skills={skills} onRefresh={fetchData} />
+            </div>
+
             {/* Agent Cards Row */}
             <div>
               <h2 className="text-xl font-semibold text-slate-900 mb-4">Active Agents</h2>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 {agents.length > 0 ? (
                   agents.map((agent) => <AgentCard key={agent.agent_id} agent={agent} />)
                 ) : (
-                  <div className="col-span-3 text-center py-8 bg-white rounded-lg border border-slate-200">
+                  <div className="col-span-4 text-center py-8 bg-white rounded-lg border border-slate-200">
                     <p className="text-slate-600 mb-4">No agents yet.</p>
                     <Button onClick={createDemoAgents} variant="outline">
                       Create Demo Agents
                     </Button>
                   </div>
                 )}
-              </div>
-            </div>
-
-            {/* Main Content Grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Skill Library (2 columns) */}
-              <div className="lg:col-span-2">
-                <SkillLibrary skills={skills} onRefresh={fetchData} />
-              </div>
-
-              {/* Activity Feed (1 column) */}
-              <div className="lg:col-span-1">
-                <ActivityFeed messages={messages} />
               </div>
             </div>
 

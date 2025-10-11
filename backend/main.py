@@ -639,7 +639,7 @@ async def start_demo(background_tasks: BackgroundTasks):
     # Run simulation in background
     async def run_demo():
         try:
-            results = await run_simulation_with_websocket(maze, manager)
+            results = await run_simulation_with_websocket(maze, manager, db)
             print(f"✅ Demo completed: {results}")
         except Exception as e:
             print(f"❌ Demo failed: {e}")
@@ -681,6 +681,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 # Client subscribes to specific events
                 await websocket.send_json({
                     "type": "subscribed",
+                    "timestamp": datetime.now().isoformat(),
                     "message": "You are now subscribed to MirrorMinds events"
                 })
 

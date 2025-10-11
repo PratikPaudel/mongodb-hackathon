@@ -7,9 +7,10 @@ For full PyGame visualization, see PRD_2.md
 
 import asyncio
 import random
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Optional
 from dataclasses import dataclass, field
 from datetime import datetime
+from pathfinding import solve_maze as pathfinding_solve_maze, Maze as PathfindingMaze, Position as PathfindingPosition
 
 @dataclass
 class Position:
@@ -172,16 +173,15 @@ class MazeSimulation:
                 agent.position = Position(next_pos.x, next_pos.y)
                 agent.path_history.append(Position(next_pos.x, next_pos.y))
 
-                # Broadcast position update every 5 steps
-                if steps % 5 == 0:
-                    await self.broadcast_event("agent_position", {
-                        "agent_id": agent.agent_id,
-                        "position": {"x": agent.position.x, "y": agent.position.y},
-                        "steps": steps
-                    })
+                # Broadcast position update EVERY step for smooth visualization
+                await self.broadcast_event("agent_position", {
+                    "agent_id": agent.agent_id,
+                    "position": {"x": agent.position.x, "y": agent.position.y},
+                    "steps": steps
+                })
 
             steps += 1
-            await asyncio.sleep(0.05)  # Slow down for demo visibility
+            await asyncio.sleep(0.08)  # Slow down more for better visibility
 
         agent.status = "completed"
         end_time = datetime.now()
@@ -192,6 +192,78 @@ class MazeSimulation:
             "completion_time": agent.completion_time,
             "steps": steps,
             "strategy": "random_exploration"
+        })
+
+        return agent.completion_time
+
+    async def pathfinding_navigation(self, agent: Agent, algorithm: str = "bfs") -> float:
+        """
+        Agent navigates using pathfinding algorithm (BFS, DFS, A*, Dijkstra)
+
+        Args:
+            agent: Agent to navigate
+            algorithm: One of ["bfs", "dfs", "astar", "dijkstra"]
+
+        Returns:
+            completion_time in seconds, or -1 if failed
+        """
+        agent.status = "navigating"
+        start_time = datetime.now()
+
+        await self.broadcast_event("agent_start", {
+            "agent_id": agent.agent_id,
+            "agent_name": agent.name,
+            "strategy": f"pathfinding_{algorithm}"
+        })
+
+        # Use pathfinding algorithm to find optimal path
+        pathfinding_maze = PathfindingMaze(
+            grid=self.maze.grid,
+            spawn=PathfindingPosition(self.maze.spawn.x, self.maze.spawn.y),
+            goal=PathfindingPosition(self.maze.goal.x, self.maze.goal.y)
+        )
+
+        optimal_path = pathfinding_solve_maze(pathfinding_maze, algorithm)
+
+        if not optimal_path:
+            agent.status = "failed"
+            await self.broadcast_event("agent_failed", {
+                "agent_id": agent.agent_id,
+                "reason": "no_path_found",
+                "algorithm": algorithm
+            })
+            return -1
+
+        # Navigate along the optimal path
+        steps = 0
+        for step in optimal_path:
+            agent.position = Position(step['x'], step['y'])
+            agent.path_history.append(Position(step['x'], step['y']))
+
+            # Broadcast position update
+            await self.broadcast_event("agent_position", {
+                "agent_id": agent.agent_id,
+                "position": {"x": agent.position.x, "y": agent.position.y},
+                "steps": steps,
+                "algorithm": algorithm
+            })
+
+            steps += 1
+            await asyncio.sleep(0.08)  # Same speed as random walk
+
+            if agent.position == self.maze.goal:
+                break
+
+        agent.status = "completed"
+        end_time = datetime.now()
+        agent.completion_time = (end_time - start_time).total_seconds()
+
+        await self.broadcast_event("agent_completed", {
+            "agent_id": agent.agent_id,
+            "completion_time": agent.completion_time,
+            "steps": steps,
+            "strategy": f"pathfinding_{algorithm}",
+            "algorithm": algorithm
         })
 
         return agent.completion_time
@@ -223,7 +295,7 @@ class MazeSimulation:
             })
 
             steps += 1
-            await asyncio.sleep(0.03)  # Faster than random walk
+            await asyncio.sleep(0.05)  # Faster than random walk but still visible
 
             if agent.position == self.maze.goal:
                 break
@@ -340,6 +412,148 @@ class MazeSimulation:
             "improvement_percentage": improvement,
             "agent_a_steps": len(agent_a.path_history),
             "agent_b_steps": len(agent_b.path_history)
+        }
+
+    async def run_agent_alpha_only(self, use_pathfinding: bool = True, algorithm: str = "bfs") -> Dict:
+        """
+        Run Agent Alpha only (Phase 1 & 2) - HUMAN PAUSE HERE
+
+        Args:
+            use_pathfinding: If True, use pathfinding algorithm. If False, use random walk.
+            algorithm: Pathfinding algorithm to use ("bfs", "dfs", "astar", "dijkstra")
+        """
+        print("🎬 Starting Agent Alpha (Explorer)...")
+
+        # Create Agent A (Explorer)
+        agent_a = Agent(
+            agent_id="agent_alpha",
+            name="Agent Alpha (Explorer)",
+            position=Position(self.maze.spawn.x, self.maze.spawn.y)
+        )
+        self.add_agent(agent_a)
+
+        # Agent A: Navigate using chosen strategy
+        if use_pathfinding:
+            print(f"📍 Agent Alpha: Using {algorithm.upper()} pathfinding...")
+            time_a = await self.pathfinding_navigation(agent_a, algorithm=algorithm)
+        else:
+            print("📍 Agent Alpha: Starting random exploration...")
+            time_a = await self.random_walk(agent_a, max_steps=500)
+
+        if time_a < 0:
+            print("❌ Agent Alpha failed to complete")
+            return {"error": "Agent A failed"}
+
+        print(f"✅ Agent Alpha completed in {time_a:.2f}s with {len(agent_a.path_history)} steps")
+
+        # Extract skill from Agent A's path
+        skill_path = [{"x": p.x, "y": p.y} for p in agent_a.path_history]
+
+        # Pause for effect
+        await asyncio.sleep(2)
+
+        # Broadcast skill extraction
+        await self.broadcast_event("skill_extracted", {
+            "from_agent": agent_a.agent_id,
+            "skill_name": "Maze Navigation Strategy",
+            "path_length": len(skill_path),
+            "completion_time": time_a
+        })
+
+        # Save skill to MongoDB
+        skill_id = await self.save_skill_to_db({
+            "name": "L-Shaped Maze Navigation",
+            "description": f"Efficient navigation strategy for L-shaped mazes. Learned from {agent_a.name}'s successful exploration.",
+            "author_agent": agent_a.agent_id,
+            "visual_path": skill_path,
+            "completion_time": time_a
+        })
+
+        await asyncio.sleep(1)
+
+        # Broadcast that Alpha is complete and waiting for user
+        await self.broadcast_event("alpha_complete_waiting", {
+            "agent_id": agent_a.agent_id,
+            "completion_time": time_a,
+            "steps": len(agent_a.path_history),
+            "skill_id": skill_id,
+            "message": "Agent Alpha complete! Click 'Run Agent Beta' to continue."
+        })
+
+        return {
+            "success": True,
+            "agent_a_time": time_a,
+            "agent_a_steps": len(agent_a.path_history),
+            "skill_path": skill_path,
+            "skill_id": skill_id
+        }
+
+    async def run_agent_beta_only(self, skill_path: List[Dict], agent_alpha_time: float) -> Dict:
+        """Run Agent Beta with learned skill (Phase 3 & 4)"""
+        print("📍 Agent Beta: Starting with learned skill...")
+
+        # Create Agent B (Learner)
+        agent_b = Agent(
+            agent_id="agent_beta",
+            name="Agent Beta (Learner)",
+            position=Position(self.maze.spawn.x, self.maze.spawn.y)
+        )
+        self.add_agent(agent_b)
+
+        # Broadcast that Agent Beta is searching MongoDB for the skill
+        await self.broadcast_event("skill_retrieved", {
+            "agent_id": agent_b.agent_id,
+            "agent_name": agent_b.name,
+            "skill_name": "Maze Navigation Strategy",
+            "description": "Learned navigation pattern from agent_alpha",
+            "path_length": len(skill_path),
+            "from_agent": "agent_alpha",
+            "retrieval_method": "mongodb_vector_search"
+        })
+
+        await asyncio.sleep(2)  # Pause to show retrieval
+
+        # Broadcast skill transfer animation
+        await self.broadcast_event("skill_transfer", {
+            "from_agent": "agent_alpha",
+            "to_agent": agent_b.agent_id,
+            "skill_name": "Maze Navigation Strategy"
+        })
+
+        await asyncio.sleep(1)
+
+        # Agent B: Execute learned skill
+        time_b = await self.execute_skill(agent_b, skill_path)
+
+        print(f"✅ Agent Beta completed in {time_b:.2f}s with {len(agent_b.path_history)} steps")
+
+        # Calculate improvement
+        improvement = ((agent_alpha_time - time_b) / agent_alpha_time) * 100 if agent_alpha_time > 0 else 0
+
+        print(f"📊 Improvement: {improvement:.1f}% faster")
+
+        # Broadcast comparison
+        await self.broadcast_event("demo_complete", {
+            "agent_a": {
+                "name": "Agent Alpha (Explorer)",
+                "time": agent_alpha_time,
+                "steps": len(skill_path),  # Alpha's step count
+                "strategy": "random_exploration"
+            },
+            "agent_b": {
+                "name": agent_b.name,
+                "time": time_b,
+                "steps": len(agent_b.path_history),
+                "strategy": "learned_skill"
+            },
+            "improvement_percentage": improvement
+        })
+
+        return {
+            "success": True,
+            "agent_b_time": time_b,
+            "agent_b_steps": len(agent_b.path_history),
+            "improvement_percentage": improvement
         }
 
 # ============================================================================

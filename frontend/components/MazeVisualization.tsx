@@ -70,12 +70,24 @@ export function MazeVisualization({ messages }: MazeVisualizationProps) {
     setMaze(defaultMaze);
   }, []);
 
+  // Track last processed message index to avoid reprocessing
+  const [lastProcessedIndex, setLastProcessedIndex] = useState(-1);
+
   // Process WebSocket messages to update agent positions
   useEffect(() => {
     if (!messages.length) return;
 
-    const latestMessage = messages[messages.length - 1];
+    // Process ALL new messages since last check (not just the latest one!)
+    const newMessages = messages.slice(lastProcessedIndex + 1);
 
+    newMessages.forEach((message) => {
+      processMessage(message);
+    });
+
+    setLastProcessedIndex(messages.length - 1);
+  }, [messages]);
+
+  const processMessage = (latestMessage: any) => {
     switch (latestMessage.type) {
       case 'demo_starting':
         setDemoActive(true);
@@ -91,6 +103,8 @@ export function MazeVisualization({ messages }: MazeVisualizationProps) {
         const agentId = latestMessage.data.agent_id;
         const agentName = latestMessage.data.agent_name;
         const strategy = latestMessage.data.strategy;
+
+        console.log('🚀 Agent started:', { agentId, agentName, strategy });
 
         const isAlpha = agentId === 'agent_alpha';
         setDemoPhase({
@@ -110,6 +124,7 @@ export function MazeVisualization({ messages }: MazeVisualizationProps) {
             status: 'navigating',
             strategy: strategy,
           });
+          console.log('✅ Agent added to map. Total agents:', newAgents.size);
           return newAgents;
         });
         break;
@@ -125,6 +140,12 @@ export function MazeVisualization({ messages }: MazeVisualizationProps) {
             agent.position = position;
             agent.path.push(position);
             newAgents.set(posAgentId, agent);
+            // Log every 10th position update to avoid spam
+            if (agent.path.length % 10 === 0) {
+              console.log(`📍 Agent ${posAgentId} at (${position.x}, ${position.y}) - ${agent.path.length} steps`);
+            }
+          } else {
+            console.warn(`⚠️ Agent ${posAgentId} not found in map when updating position`);
           }
           return newAgents;
         });
@@ -147,20 +168,30 @@ export function MazeVisualization({ messages }: MazeVisualizationProps) {
         break;
 
       case 'skill_extracted':
+        // Phase 2: Skill extracted and saved to MongoDB (don't show card yet)
         setSkillExtracted(true);
+        setDemoPhase({
+          current: 'skill_extraction',
+          message: `Skill extracted and saved to MongoDB! Ready for Agent Beta to retrieve it.`,
+          step: 2
+        });
+        setTimeout(() => setSkillExtracted(false), 2000);
+        break;
+
+      case 'skill_retrieved':
+        // Phase 3: Agent Beta retrieves skill from MongoDB (NOW show the card!)
         setSkillData({
           skill_id: `skill_${Date.now()}`,
           name: latestMessage.data.skill_name || 'Maze Navigation Strategy',
-          description: `Learned navigation pattern from ${latestMessage.data.from_agent}`,
+          description: latestMessage.data.description || `Learned navigation pattern from ${latestMessage.data.from_agent}`,
           path_length: latestMessage.data.path_length,
           from_agent: latestMessage.data.from_agent
         });
         setDemoPhase({
-          current: 'skill_extraction',
-          message: `Extracting skill from ${latestMessage.data.from_agent}... Path length: ${latestMessage.data.path_length} steps`,
-          step: 2
+          current: 'skill_retrieval',
+          message: `${latestMessage.data.agent_name} retrieved skill from MongoDB via Vector Search!`,
+          step: 3
         });
-        setTimeout(() => setSkillExtracted(false), 2000);
         break;
 
       case 'skill_transfer':
@@ -188,7 +219,7 @@ export function MazeVisualization({ messages }: MazeVisualizationProps) {
         setTimeout(() => setDemoActive(false), 5000);
         break;
     }
-  }, [messages]);
+  };
 
   const cellSize = 40;
   const gridWidth = maze[0]?.length || 10;
@@ -234,6 +265,11 @@ export function MazeVisualization({ messages }: MazeVisualizationProps) {
             <h3 className="text-lg font-semibold">Maze Navigation</h3>
             <p className="text-sm text-slate-600">
               {demoActive ? 'Demo in progress' : 'Waiting for demo to start'}
+              {agents.size > 0 && (
+                <span className="ml-2 text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                  {agents.size} agent{agents.size !== 1 ? 's' : ''} active
+                </span>
+              )}
             </p>
           </div>
 
@@ -255,7 +291,7 @@ export function MazeVisualization({ messages }: MazeVisualizationProps) {
         </div>
 
         {/* Skill Data Display - MongoDB Vector Search Result */}
-        {skillData && demoPhase.step >= 2 && (
+        {skillData && demoPhase.step >= 3 && (
           <div className="p-4 bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg border-2 border-purple-300">
             <div className="flex items-start gap-3">
               <div className="text-3xl">🧠</div>
@@ -321,35 +357,44 @@ export function MazeVisualization({ messages }: MazeVisualizationProps) {
 
             {/* Draw agent paths */}
             {Array.from(agents.values()).map((agent) =>
-              agent.path.map((pos, idx) => (
-                <div
-                  key={`path-${agent.id}-${idx}`}
-                  className="absolute transition-all duration-300"
-                  style={{
-                    left: pos.x * cellSize + cellSize / 2 - 2,
-                    top: pos.y * cellSize + cellSize / 2 - 2,
-                    width: 4,
-                    height: 4,
-                    backgroundColor: agent.color,
-                    opacity: 0.3,
-                    borderRadius: '50%',
-                  }}
-                />
-              ))
+              agent.path.map((pos, idx) => {
+                // Fade trail from oldest to newest
+                const opacity = 0.2 + (idx / agent.path.length) * 0.4;
+                return (
+                  <div
+                    key={`path-${agent.id}-${idx}`}
+                    className="absolute transition-opacity duration-500"
+                    style={{
+                      left: pos.x * cellSize + cellSize / 2 - 3,
+                      top: pos.y * cellSize + cellSize / 2 - 3,
+                      width: 6,
+                      height: 6,
+                      backgroundColor: agent.color,
+                      opacity: opacity,
+                      borderRadius: '50%',
+                    }}
+                  />
+                );
+              })
             )}
 
             {/* Draw agents */}
             {Array.from(agents.values()).map((agent) => (
               <div
                 key={`agent-${agent.id}`}
-                className="absolute transition-all duration-200 rounded-full border-2 border-white shadow-lg flex items-center justify-center font-bold text-white text-xs"
+                className={`absolute transition-all duration-150 ease-linear rounded-full border-3 border-white shadow-lg flex items-center justify-center font-bold text-white text-sm ${
+                  agent.status === 'navigating' ? 'animate-pulse' : ''
+                }`}
                 style={{
-                  left: agent.position.x * cellSize + cellSize / 2 - 12,
-                  top: agent.position.y * cellSize + cellSize / 2 - 12,
-                  width: 24,
-                  height: 24,
+                  left: agent.position.x * cellSize + cellSize / 2 - 16,
+                  top: agent.position.y * cellSize + cellSize / 2 - 16,
+                  width: 32,
+                  height: 32,
                   backgroundColor: agent.color,
                   zIndex: 10,
+                  boxShadow: agent.status === 'navigating'
+                    ? `0 0 20px ${agent.color}`
+                    : '0 4px 6px rgba(0,0,0,0.1)',
                 }}
                 title={agent.name}
               >

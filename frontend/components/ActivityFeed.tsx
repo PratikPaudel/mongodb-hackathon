@@ -27,9 +27,11 @@ export function ActivityFeed({ messages }: ActivityFeedProps) {
       agent_failed: '❌',
       skill_created: '✨',
       skill_extracted: '🎓',
+      skill_retrieved: '🔍',
       skill_transfer: '🔄',
       task_started: '▶️',
       demo_complete: '🎉',
+      alpha_complete_waiting: '⏸️',
       subscribed: '🔔',
       pong: '🏓',
       stats: '📊',
@@ -47,6 +49,7 @@ export function ActivityFeed({ messages }: ActivityFeedProps) {
   const getEventColor = (type: string) => {
     if (type.includes('completed') || type.includes('success')) return 'border-green-500';
     if (type.includes('failed') || type.includes('error')) return 'border-red-500';
+    if (type.includes('retrieved')) return 'border-purple-600';
     if (type.includes('transfer') || type.includes('skill')) return 'border-purple-500';
     if (type.includes('start') || type.includes('created')) return 'border-blue-500';
     return 'border-slate-300';
@@ -87,11 +90,40 @@ export function ActivityFeed({ messages }: ActivityFeedProps) {
                         Completed in <span className="font-bold text-green-700">{message.data.completion_time?.toFixed(2)}s</span> ({message.data.steps} steps)
                       </p>
                     )}
-                    {message.type === 'skill_transfer' && (
+                    {message.type === 'skill_retrieved' && (
+                      <div className="space-y-1">
+                        <p className="font-bold text-purple-700">
+                          {message.data.agent_name} retrieved skill from MongoDB!
+                        </p>
+                        <p className="text-xs">
+                          Skill: <span className="font-medium">{message.data.skill_name}</span>
+                        </p>
+                        <p className="text-xs">
+                          Path Length: {message.data.path_length} steps
+                        </p>
+                        <p className="text-xs bg-purple-100 px-2 py-1 rounded">
+                          🔍 MongoDB Atlas Vector Search
+                        </p>
+                      </div>
+                    )}
+                    {message.type === 'skill_transferred' && (
                       <p>
                         Skill transferred from <span className="font-medium">{message.data.from_agent}</span> to{' '}
                         <span className="font-medium">{message.data.to_agent}</span>
                       </p>
+                    )}
+                    {message.type === 'alpha_complete_waiting' && (
+                      <div className="space-y-1">
+                        <p className="font-bold text-blue-700">
+                          Agent Alpha completed! Ready for Agent Beta.
+                        </p>
+                        <p className="text-xs">
+                          Time: {message.data.completion_time?.toFixed(2)}s | Steps: {message.data.steps}
+                        </p>
+                        <p className="text-xs text-purple-600">
+                          Click "Run Agent Beta" button to continue →
+                        </p>
+                      </div>
                     )}
                     {message.type === 'demo_complete' && (
                       <div className="space-y-1">
@@ -106,7 +138,7 @@ export function ActivityFeed({ messages }: ActivityFeedProps) {
                         </p>
                       </div>
                     )}
-                    {!['agent_start', 'agent_completed', 'skill_transfer', 'demo_complete'].includes(message.type) && message.data && (
+                    {!['agent_start', 'agent_completed', 'skill_retrieved', 'skill_transfer', 'alpha_complete_waiting', 'demo_complete'].includes(message.type) && message.data && (
                       <p className="truncate">{JSON.stringify(message.data).slice(0, 100)}...</p>
                     )}
                   </div>

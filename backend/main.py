@@ -79,6 +79,15 @@ class ConnectionManager:
 
 manager = ConnectionManager()
 
+# Demo state for human-in-the-loop flow
+demo_state = {
+    "maze": None,
+    "agent_alpha_result": None,
+    "skill_path": None,
+    "skill_id": None,
+    "in_progress": False
+}
+
 # ============================================================================
 # PYDANTIC MODELS
 # ============================================================================
@@ -618,7 +627,7 @@ async def get_agent_analytics():
 
 @app.post("/api/demo/start")
 async def start_demo(background_tasks: BackgroundTasks):
-    """Start the demonstration sequence"""
+    """LEGACY: Start the full automated demonstration sequence"""
 
     # Get the demo maze
     maze = await db.mazes.find_one({"maze_id": "maze_l_shaped_easy"})
@@ -656,6 +665,128 @@ async def start_demo(background_tasks: BackgroundTasks):
         "success": True,
         "message": "Demo started - watch the Activity Feed for real-time updates!",
         "maze_id": maze["maze_id"]
+    }
+
+@app.post("/api/demo/run-alpha")
+async def run_agent_alpha(background_tasks: BackgroundTasks):
+    """Run Agent Alpha only (Phase 1 & 2) - Human-in-the-loop"""
+
+    if demo_state["in_progress"]:
+        raise HTTPException(status_code=400, detail="Demo already in progress")
+
+    # Get the demo maze
+    maze = await db.mazes.find_one({"maze_id": "maze_l_shaped_easy"})
+
+    if not maze:
+        raise HTTPException(status_code=404, detail="Demo maze not found")
+
+    # Store maze for later
+    demo_state["maze"] = maze
+    demo_state["in_progress"] = True
+
+    # Broadcast demo start event
+    await manager.broadcast({
+        "type": "demo_starting",
+        "timestamp": datetime.now().isoformat(),
+        "data": {
+            "message": "Starting Agent Alpha...",
+            "maze_id": maze["maze_id"]
+        }
+    })
+
+    # Run Agent Alpha in background
+    async def run_alpha():
+        try:
+            from simulation_simple import Maze, Position, MazeSimulation
+
+            maze_obj = Maze(
+                grid=maze['grid'],
+                spawn=Position(**maze['spawn_point']),
+                goal=Position(**maze['goal_point'])
+            )
+
+            sim = MazeSimulation(maze_obj, manager, db)
+            results = await sim.run_agent_alpha_only()
+
+            if results.get("success"):
+                # Store results for Agent Beta
+                demo_state["agent_alpha_result"] = results
+                demo_state["skill_path"] = results["skill_path"]
+                demo_state["skill_id"] = results["skill_id"]
+
+                print(f"✅ Agent Alpha completed: {results}")
+            else:
+                demo_state["in_progress"] = False
+
+        except Exception as e:
+            print(f"❌ Agent Alpha failed: {e}")
+            demo_state["in_progress"] = False
+            await manager.broadcast({
+                "type": "demo_failed",
+                "timestamp": datetime.now().isoformat(),
+                "data": {"error": str(e)}
+            })
+
+    # Schedule Alpha to run in background
+    background_tasks.add_task(run_alpha)
+
+    return {
+        "success": True,
+        "message": "Agent Alpha starting...",
+        "maze_id": maze["maze_id"]
+    }
+
+@app.post("/api/demo/run-beta")
+async def run_agent_beta(background_tasks: BackgroundTasks):
+    """Run Agent Beta with learned skill (Phase 3 & 4) - Human-in-the-loop"""
+
+    if not demo_state["in_progress"]:
+        raise HTTPException(status_code=400, detail="No demo in progress. Run Agent Alpha first.")
+
+    if not demo_state["agent_alpha_result"]:
+        raise HTTPException(status_code=400, detail="Agent Alpha has not completed yet")
+
+    # Run Agent Beta in background
+    async def run_beta():
+        try:
+            from simulation_simple import Maze, Position, MazeSimulation
+
+            maze = demo_state["maze"]
+            maze_obj = Maze(
+                grid=maze['grid'],
+                spawn=Position(**maze['spawn_point']),
+                goal=Position(**maze['goal_point'])
+            )
+
+            sim = MazeSimulation(maze_obj, manager, db)
+            results = await sim.run_agent_beta_only(
+                demo_state["skill_path"],
+                demo_state["agent_alpha_result"]["agent_a_time"]
+            )
+
+            print(f"✅ Agent Beta completed: {results}")
+
+            # Clear demo state
+            demo_state["in_progress"] = False
+            demo_state["agent_alpha_result"] = None
+            demo_state["skill_path"] = None
+            demo_state["skill_id"] = None
+
+        except Exception as e:
+            print(f"❌ Agent Beta failed: {e}")
+            demo_state["in_progress"] = False
+            await manager.broadcast({
+                "type": "demo_failed",
+                "timestamp": datetime.now().isoformat(),
+                "data": {"error": str(e)}
+            })
+
+    # Schedule Beta to run in background
+    background_tasks.add_task(run_beta)
+
+    return {
+        "success": True,
+        "message": "Agent Beta starting with learned skill..."
     }
 
 # ============================================================================

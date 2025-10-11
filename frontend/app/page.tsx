@@ -58,6 +58,7 @@ export default function Dashboard() {
   const [skills, setSkills] = useState<Skill[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [demoRunning, setDemoRunning] = useState(false);
+  const [waitingForBeta, setWaitingForBeta] = useState(false);
 
   // Keep the backend alive
   useKeepAlive(API_URL, true, 14);
@@ -66,6 +67,16 @@ export default function Dashboard() {
   useEffect(() => {
     fetchData();
   }, []);
+
+  // Listen for Alpha complete event to show Beta button
+  useEffect(() => {
+    if (messages.length > 0) {
+      const latestMessage = messages[messages.length - 1];
+      if (latestMessage.type === 'alpha_complete_waiting') {
+        setWaitingForBeta(true);
+      }
+    }
+  }, [messages]);
 
   const fetchData = async () => {
     try {
@@ -116,6 +127,7 @@ export default function Dashboard() {
   const startDemo = async () => {
     try {
       setDemoRunning(true);
+      setWaitingForBeta(false);
       clearMessages();
 
       // Create agents if they don't exist
@@ -123,9 +135,9 @@ export default function Dashboard() {
         await createDemoAgents();
       }
 
-      // Start the demo simulation on the backend
-      console.log('🎬 Starting MirrorMinds demo...');
-      const response = await fetch(`${API_URL}/api/demo/start`, {
+      // Start Agent Alpha only (human-in-the-loop)
+      console.log('🎬 Starting Agent Alpha...');
+      const response = await fetch(`${API_URL}/api/demo/run-alpha`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' }
       });
@@ -135,17 +147,39 @@ export default function Dashboard() {
       }
 
       const result = await response.json();
-      console.log('✅ Demo started:', result.message);
-
-      // Demo will run in background and broadcast via WebSocket
-      // Keep button disabled during demo
-      setTimeout(() => {
-        setDemoRunning(false);
-        fetchData(); // Refresh data after demo
-      }, 10000); // Give demo 10 seconds to complete
+      console.log('✅ Agent Alpha started:', result.message);
 
     } catch (error) {
       console.error('Error starting demo:', error);
+      setDemoRunning(false);
+    }
+  };
+
+  const runAgentBeta = async () => {
+    try {
+      setWaitingForBeta(false);
+
+      console.log('🚀 Starting Agent Beta...');
+      const response = await fetch(`${API_URL}/api/demo/run-beta`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+
+      if (!response.ok) {
+        throw new Error(`Agent Beta failed: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+      console.log('✅ Agent Beta started:', result.message);
+
+      // Reset after beta completes
+      setTimeout(() => {
+        setDemoRunning(false);
+        fetchData();
+      }, 8000);
+
+    } catch (error) {
+      console.error('Error running Agent Beta:', error);
       setDemoRunning(false);
     }
   };
@@ -172,15 +206,25 @@ export default function Dashboard() {
                 </span>
               </div>
 
-              {/* Start Demo Button */}
-              <Button
-                onClick={startDemo}
-                disabled={demoRunning || isLoading}
-                size="lg"
-                className="bg-blue-600 hover:bg-blue-700"
-              >
-                {demoRunning ? 'Demo Running...' : 'Start Demo'}
-              </Button>
+              {/* Demo Control Buttons */}
+              {waitingForBeta ? (
+                <Button
+                  onClick={runAgentBeta}
+                  size="lg"
+                  className="bg-green-600 hover:bg-green-700 animate-pulse"
+                >
+                  Run Agent Beta 🚀
+                </Button>
+              ) : (
+                <Button
+                  onClick={startDemo}
+                  disabled={demoRunning || isLoading}
+                  size="lg"
+                  className="bg-blue-600 hover:bg-blue-700"
+                >
+                  {demoRunning ? 'Agent Alpha Running...' : 'Start Demo'}
+                </Button>
+              )}
             </div>
           </div>
         </div>

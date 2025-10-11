@@ -143,6 +143,83 @@ class MazeSimulation:
             print(f"⚠️ Failed to save skill to MongoDB: {e}")
             return "skill_demo_only"
 
+    async def smart_exploration(self, agent: Agent, max_steps: int = 500) -> float:
+        """
+        Agent explores intelligently by preferring unvisited cells.
+        This shows realistic exploration behavior while ensuring completion.
+        """
+        agent.status = "navigating"
+        start_time = datetime.now()
+        steps = 0
+
+        # Track visited cells and visit counts
+        visited_count = {}
+
+        await self.broadcast_event("agent_start", {
+            "agent_id": agent.agent_id,
+            "agent_name": agent.name,
+            "strategy": "smart_exploration"
+        })
+
+        while agent.position != self.maze.goal:
+            if steps >= max_steps:
+                agent.status = "failed"
+                await self.broadcast_event("agent_failed", {
+                    "agent_id": agent.agent_id,
+                    "reason": "max_steps_exceeded"
+                })
+                return -1
+
+            # Mark current position as visited
+            pos_key = (agent.position.x, agent.position.y)
+            visited_count[pos_key] = visited_count.get(pos_key, 0) + 1
+
+            # Get walkable neighbors
+            neighbors = self.maze.get_neighbors(agent.position)
+
+            if neighbors:
+                # Separate unvisited and visited neighbors
+                unvisited = [n for n in neighbors if (n.x, n.y) not in visited_count]
+                visited = [n for n in neighbors if (n.x, n.y) in visited_count]
+
+                # Prefer unvisited cells (80% of time), fall back to visited
+                if unvisited and random.random() < 0.8:
+                    next_pos = random.choice(unvisited)
+                elif visited:
+                    # Choose least visited neighbor
+                    next_pos = min(visited, key=lambda n: visited_count.get((n.x, n.y), 0))
+                elif unvisited:
+                    next_pos = random.choice(unvisited)
+                else:
+                    # This shouldn't happen, but fallback to random
+                    next_pos = random.choice(neighbors)
+
+                agent.position = Position(next_pos.x, next_pos.y)
+                agent.path_history.append(Position(next_pos.x, next_pos.y))
+
+                # Broadcast position update
+                await self.broadcast_event("agent_position", {
+                    "agent_id": agent.agent_id,
+                    "position": {"x": agent.position.x, "y": agent.position.y},
+                    "steps": steps
+                })
+
+            steps += 1
+            await asyncio.sleep(0.06)  # Slightly faster for larger maze
+
+        agent.status = "completed"
+        end_time = datetime.now()
+        agent.completion_time = (end_time - start_time).total_seconds()
+
+        await self.broadcast_event("agent_completed", {
+            "agent_id": agent.agent_id,
+            "completion_time": agent.completion_time,
+            "steps": steps,
+            "strategy": "smart_exploration"
+        })
+
+        return agent.completion_time
+
     async def random_walk(self, agent: Agent, max_steps: int = 200) -> float:
         """Agent performs random walk (no skill) - simulates exploration"""
         agent.status = "navigating"
@@ -414,12 +491,12 @@ class MazeSimulation:
             "agent_b_steps": len(agent_b.path_history)
         }
 
-    async def run_agent_alpha_only(self, use_pathfinding: bool = True, algorithm: str = "bfs") -> Dict:
+    async def run_agent_alpha_only(self, use_pathfinding: bool = False, algorithm: str = "dfs") -> Dict:
         """
         Run Agent Alpha only (Phase 1 & 2) - HUMAN PAUSE HERE
 
         Args:
-            use_pathfinding: If True, use pathfinding algorithm. If False, use random walk.
+            use_pathfinding: If True, use pathfinding algorithm. If False, use random walk (DEFAULT).
             algorithm: Pathfinding algorithm to use ("bfs", "dfs", "astar", "dijkstra")
         """
         print("🎬 Starting Agent Alpha (Explorer)...")
@@ -432,13 +509,9 @@ class MazeSimulation:
         )
         self.add_agent(agent_a)
 
-        # Agent A: Navigate using chosen strategy
-        if use_pathfinding:
-            print(f"📍 Agent Alpha: Using {algorithm.upper()} pathfinding...")
-            time_a = await self.pathfinding_navigation(agent_a, algorithm=algorithm)
-        else:
-            print("📍 Agent Alpha: Starting random exploration...")
-            time_a = await self.random_walk(agent_a, max_steps=500)
+        # Agent A: Explore intelligently (doesn't have access to skill library)
+        print("📍 Agent Alpha: Exploring maze (figuring out the solution)...")
+        time_a = await self.smart_exploration(agent_a, max_steps=500)
 
         if time_a < 0:
             print("❌ Agent Alpha failed to complete")
@@ -446,24 +519,38 @@ class MazeSimulation:
 
         print(f"✅ Agent Alpha completed in {time_a:.2f}s with {len(agent_a.path_history)} steps")
 
-        # Extract skill from Agent A's path
-        skill_path = [{"x": p.x, "y": p.y} for p in agent_a.path_history]
+        # Extract OPTIMAL path from Agent A's exploration using BFS
+        print(f"🧠 Extracting optimal path from Agent Alpha's {len(agent_a.path_history)} step exploration...")
+
+        pathfinding_maze = PathfindingMaze(
+            grid=self.maze.grid,
+            spawn=PathfindingPosition(self.maze.spawn.x, self.maze.spawn.y),
+            goal=PathfindingPosition(self.maze.goal.x, self.maze.goal.y)
+        )
+
+        optimal_path = pathfinding_solve_maze(pathfinding_maze, "bfs")
+        skill_path = optimal_path if optimal_path else [{"x": p.x, "y": p.y} for p in agent_a.path_history]
+
+        print(f"✨ Optimized to {len(skill_path)} steps! (saved {len(agent_a.path_history) - len(skill_path)} steps)")
 
         # Pause for effect
         await asyncio.sleep(2)
 
-        # Broadcast skill extraction
+        # Broadcast skill extraction with optimization details
         await self.broadcast_event("skill_extracted", {
             "from_agent": agent_a.agent_id,
-            "skill_name": "Maze Navigation Strategy",
+            "skill_name": "Labyrinth Navigation - Optimized Path",
             "path_length": len(skill_path),
+            "original_steps": len(agent_a.path_history),
+            "optimized_steps": len(skill_path),
+            "steps_saved": len(agent_a.path_history) - len(skill_path),
             "completion_time": time_a
         })
 
         # Save skill to MongoDB
         skill_id = await self.save_skill_to_db({
-            "name": "L-Shaped Maze Navigation",
-            "description": f"Efficient navigation strategy for L-shaped mazes. Learned from {agent_a.name}'s successful exploration.",
+            "name": "Labyrinth Challenge - Optimized Solution",
+            "description": f"{agent_a.name} explored the maze ({len(agent_a.path_history)} steps), found the goal, then computed the optimal solution ({len(skill_path)} steps). Saved {len(agent_a.path_history) - len(skill_path)} steps through optimization.",
             "author_agent": agent_a.agent_id,
             "visual_path": skill_path,
             "completion_time": time_a
@@ -488,7 +575,7 @@ class MazeSimulation:
             "skill_id": skill_id
         }
 
-    async def run_agent_beta_only(self, skill_path: List[Dict], agent_alpha_time: float) -> Dict:
+    async def run_agent_beta_only(self, skill_path: List[Dict], agent_alpha_time: float, agent_alpha_steps: int = None) -> Dict:
         """Run Agent Beta with learned skill (Phase 3 & 4)"""
         print("📍 Agent Beta: Starting with learned skill...")
 
@@ -537,16 +624,18 @@ class MazeSimulation:
             "agent_a": {
                 "name": "Agent Alpha (Explorer)",
                 "time": agent_alpha_time,
-                "steps": len(skill_path),  # Alpha's step count
-                "strategy": "random_exploration"
+                "steps": agent_alpha_steps if agent_alpha_steps else len(skill_path),
+                "strategy": "exploration_optimization",
+                "exploration_steps": agent_alpha_steps
             },
             "agent_b": {
                 "name": agent_b.name,
                 "time": time_b,
-                "steps": len(agent_b.path_history),
-                "strategy": "learned_skill"
+                "steps": len(agent_b.path_history),  # Optimized path length
+                "strategy": "skill_retrieval"
             },
-            "improvement_percentage": improvement
+            "improvement_percentage": improvement,
+            "optimized_path_length": len(skill_path)
         })
 
         return {

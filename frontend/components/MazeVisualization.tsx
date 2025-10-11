@@ -53,19 +53,24 @@ export function MazeVisualization({ messages }: MazeVisualizationProps) {
   const [skillTransfer, setSkillTransfer] = useState(false);
   const [skillData, setSkillData] = useState<SkillData | null>(null);
 
-  // Default L-shaped maze
+  // Default Labyrinth Challenge maze (15x15)
   useEffect(() => {
     const defaultMaze = [
-      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-      [1, 0, 0, 0, 0, 0, 1, 1, 1, 1],
-      [1, 0, 1, 1, 1, 0, 1, 1, 1, 1],
-      [1, 0, 1, 1, 1, 0, 1, 1, 1, 1],
-      [1, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-      [1, 1, 1, 1, 1, 0, 1, 1, 0, 1],
-      [1, 1, 1, 1, 1, 0, 1, 1, 0, 1],
-      [1, 1, 1, 1, 1, 0, 0, 0, 0, 1],
-      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+      [1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1],
+      [1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1],
+      [1, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1],
+      [1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1],
+      [1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1],
+      [1, 1, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1],
+      [1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1],
+      [1, 0, 1, 0, 1, 1, 1, 1, 1, 0, 1, 0, 1, 1, 1],
+      [1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1],
+      [1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1],
+      [1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1],
+      [1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 0, 1],
+      [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
     ];
     setMaze(defaultMaze);
   }, []);
@@ -221,9 +226,9 @@ export function MazeVisualization({ messages }: MazeVisualizationProps) {
     }
   };
 
-  const cellSize = 40;
-  const gridWidth = maze[0]?.length || 10;
-  const gridHeight = maze.length || 10;
+  const cellSize = 35;  // Smaller cells for larger maze
+  const gridWidth = maze[0]?.length || 15;
+  const gridHeight = maze.length || 15;
 
   const getPhaseLabel = (step: number) => {
     switch (step) {
@@ -330,7 +335,7 @@ export function MazeVisualization({ messages }: MazeVisualizationProps) {
             {/* Draw maze grid */}
             {maze.map((row, y) =>
               row.map((cell, x) => {
-                const isGoal = x === 8 && y === 7;
+                const isGoal = x === 13 && y === 13;
                 const isSpawn = x === 1 && y === 1;
 
                 return (

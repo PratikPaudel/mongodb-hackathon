@@ -630,7 +630,7 @@ async def start_demo(background_tasks: BackgroundTasks):
     """LEGACY: Start the full automated demonstration sequence"""
 
     # Get the demo maze
-    maze = await db.mazes.find_one({"maze_id": "maze_l_shaped_easy"})
+    maze = await db.mazes.find_one({"maze_id": "maze_labyrinth_challenge"})
 
     if not maze:
         raise HTTPException(status_code=404, detail="Demo maze not found")
@@ -675,7 +675,7 @@ async def run_agent_alpha(background_tasks: BackgroundTasks):
         raise HTTPException(status_code=400, detail="Demo already in progress")
 
     # Get the demo maze
-    maze = await db.mazes.find_one({"maze_id": "maze_l_shaped_easy"})
+    maze = await db.mazes.find_one({"maze_id": "maze_labyrinth_challenge"})
 
     if not maze:
         raise HTTPException(status_code=404, detail="Demo maze not found")
@@ -761,7 +761,8 @@ async def run_agent_beta(background_tasks: BackgroundTasks):
             sim = MazeSimulation(maze_obj, manager, db)
             results = await sim.run_agent_beta_only(
                 demo_state["skill_path"],
-                demo_state["agent_alpha_result"]["agent_a_time"]
+                demo_state["agent_alpha_result"]["agent_a_time"],
+                demo_state["agent_alpha_result"]["agent_a_steps"]
             )
 
             print(f"✅ Agent Beta completed: {results}")
@@ -859,32 +860,37 @@ async def startup_event():
 async def seed_demo_data():
     """Seed database with demo mazes and skills"""
 
-    # Create demo maze
+    # Create complex demo maze - "Labyrinth Challenge"
     demo_maze = {
-        "maze_id": "maze_l_shaped_easy",
-        "name": "L-Shaped Easy",
-        "type": "l_shaped",
-        "difficulty": "easy",
-        "dimensions": {"width": 10, "height": 10, "cell_size_px": 50},
+        "maze_id": "maze_labyrinth_challenge",
+        "name": "Labyrinth Challenge",
+        "type": "labyrinth",
+        "difficulty": "medium",
+        "dimensions": {"width": 15, "height": 15, "cell_size_px": 35},
         "grid": [
-            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-            [1, 0, 0, 0, 0, 0, 1, 1, 1, 1],
-            [1, 0, 1, 1, 1, 0, 1, 1, 1, 1],
-            [1, 0, 1, 1, 1, 0, 1, 1, 1, 1],
-            [1, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-            [1, 1, 1, 1, 1, 0, 1, 1, 0, 1],
-            [1, 1, 1, 1, 1, 0, 1, 1, 0, 1],
-            [1, 1, 1, 1, 1, 0, 0, 0, 0, 1],
-            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+            [1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1],
+            [1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1],
+            [1, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1],
+            [1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1],
+            [1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1],
+            [1, 1, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1],
+            [1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1],
+            [1, 0, 1, 0, 1, 1, 1, 1, 1, 0, 1, 0, 1, 1, 1],
+            [1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1],
+            [1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1],
+            [1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1],
+            [1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 0, 1],
+            [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
         ],
         "spawn_point": {"x": 1, "y": 1},
-        "goal_point": {"x": 8, "y": 7},
+        "goal_point": {"x": 13, "y": 13},
         "created_at": datetime.now()
     }
 
     await db.mazes.insert_one(demo_maze)
-    print("✅ Demo maze created")
+    print("✅ Demo maze created: Labyrinth Challenge")
 
 # ============================================================================
 # KEEP-ALIVE (from your existing setup)

@@ -122,13 +122,27 @@ export default function Dashboard() {
         await createDemoAgents();
       }
 
-      // For now, just simulate - full integration with simulation_simple.py coming
-      console.log('🎬 Demo would start here - integrate with backend/simulation_simple.py');
+      // Start the demo simulation on the backend
+      console.log('🎬 Starting MirrorMinds demo...');
+      const response = await fetch(`${API_URL}/api/demo/start`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
 
-      // You can add a backend endpoint to trigger the simulation
-      // await fetch(`${API_URL}/api/demo/start`, { method: 'POST' });
+      if (!response.ok) {
+        throw new Error(`Demo start failed: ${response.statusText}`);
+      }
 
-      setDemoRunning(false);
+      const result = await response.json();
+      console.log('✅ Demo started:', result.message);
+
+      // Demo will run in background and broadcast via WebSocket
+      // Keep button disabled during demo
+      setTimeout(() => {
+        setDemoRunning(false);
+        fetchData(); // Refresh data after demo
+      }, 10000); // Give demo 10 seconds to complete
+
     } catch (error) {
       console.error('Error starting demo:', error);
       setDemoRunning(false);

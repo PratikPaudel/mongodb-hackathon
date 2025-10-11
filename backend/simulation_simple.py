@@ -192,7 +192,7 @@ class MazeSimulation:
 
         # Agent A: Random exploration
         print("📍 Agent Alpha: Starting random exploration...")
-        time_a = await self.random_walk(agent_a, max_steps=150)
+        time_a = await self.random_walk(agent_a, max_steps=500)
 
         if time_a < 0:
             print("❌ Agent Alpha failed to complete")
